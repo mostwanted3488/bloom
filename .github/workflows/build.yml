@@ -1,0 +1,81 @@
+name: Build BLOOM
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WebView2 SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.3485.44 -OutputDirectory "${{ github.workspace }}/nuget"
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release "-DJUCE_WEBVIEW2_PACKAGE_LOCATION=${{ github.workspace }}/nuget"
+
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --target BLOOM_VST3 BLOOM_Standalone --parallel 4
+
+      - name: Build AU (macOS)
+        if: runner.os == 'macOS'
+        run: cmake --build build --config Release --target BLOOM_AU --parallel 4
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Recurse build/BLOOM_artefacts/Release/VST3/BLOOM.vst3 dist/
+          Copy-Item build/BLOOM_artefacts/Release/Standalone/BLOOM.exe dist/
+          Copy-Item INSTALL.txt dist/
+          Compress-Archive -Path dist/* -DestinationPath BLOOM-Windows.zip
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          cp -R build/BLOOM_artefacts/Release/VST3/BLOOM.vst3 dist/
+          cp -R build/BLOOM_artefacts/Release/AU/BLOOM.component dist/
+          cp -R build/BLOOM_artefacts/Release/Standalone/BLOOM.app dist/
+          cp INSTALL.txt dist/
+          for b in dist/BLOOM.vst3 dist/BLOOM.component dist/BLOOM.app; do codesign --force --deep -s - "$b"; done
+          cd dist && zip -r -y ../BLOOM-macOS.zip . && cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOOM-${{ matrix.name }}
+          path: BLOOM-*.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BLOOM-*.zip

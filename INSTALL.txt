@@ -1,0 +1,23 @@
+BLOOM — BUYORBEALOSER
+=====================
+
+WINDOWS (FL Studio, Ableton, ...)
+  1. Copy the folder  BLOOM.vst3  to:
+       C:\Program Files\Common Files\VST3\
+  2. In FL Studio: Options > Manage plugins > Find more plugins.
+  3. Add BLOOM to a channel (it is an instrument / generator).
+  BLOOM.exe is a standalone version (no DAW needed).
+
+MAC (FL Studio, Logic, Ableton, ...)
+  1. Copy  BLOOM.vst3       to  ~/Library/Audio/Plug-Ins/VST3/
+     Copy  BLOOM.component  to  ~/Library/Audio/Plug-Ins/Components/   (Logic / AU hosts)
+  2. The plugin is not notarized yet. Open Terminal and run once:
+       xattr -cr ~/Library/Audio/Plug-Ins/VST3/BLOOM.vst3
+       xattr -cr ~/Library/Audio/Plug-Ins/Components/BLOOM.component
+  3. Rescan plugins in your DAW.
+  BLOOM.app is a standalone version.
+
+FRANCAIS
+  Windows : copier BLOOM.vst3 dans C:\Program Files\Common Files\VST3\ puis rescanner les plugins dans FL Studio.
+  Mac : copier BLOOM.vst3 dans ~/Library/Audio/Plug-Ins/VST3/ (et BLOOM.component dans .../Components/),
+        lancer les commandes xattr ci-dessus dans le Terminal, puis rescanner les plugins.
