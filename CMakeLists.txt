@@ -8,7 +8,7 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # pas besoin du redistribuable VC++
 endif()
 
-project(BLOOM VERSION 1.0.0)
+project(BLOOM VERSION 1.1.0)
 
 include(FetchContent)
 FetchContent_Declare(JUCE
@@ -32,7 +32,7 @@ juce_add_plugin(BLOOM
     FORMATS ${BLOOM_FORMATS}
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
-    NEEDS_MIDI_OUTPUT FALSE
+    NEEDS_MIDI_OUTPUT TRUE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE

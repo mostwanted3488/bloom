@@ -17,7 +17,7 @@ struct EngineParams
     float attack = 0, release = .3f, tone = .5f, space = .5f, shimmer = .25f, width = .35f,
           lowcut = .35f, glide = 0, blend = .5f, bloom = .82f, bpm = 140;
     int sound = 3, layer = -1, root = 11, scale = 0, delayDiv = 3, quant = 4, arp = 0, rate = 3;
-    bool snap = false;
+    bool snap = false, midiOut = true;
 };
 
 // Événements envoyés par l'interface (thread message → thread audio)
@@ -129,6 +129,9 @@ public:
     int popVisuals (Vis* dest, int max);
     int getActiveVoices() const noexcept { return activeVoices.load(); }
 
+    // notes jouées dans le plugin (souris / clavier / arp) renvoyées à l'hôte en MIDI
+    const juce::MidiBuffer& getOutMidi() const noexcept { return outMidi; }
+
     static constexpr int kSoundCount = 19;     // + 1 emplacement « sample »
     const std::vector<SoundDef>& sounds() const { return bank; }
 
@@ -167,6 +170,18 @@ private:
     juce::AbstractFifo visFifo { 256 };
     std::array<Vis, 256> visBuf;
 
+    // sortie MIDI + filtre anti-écho (quand l'hôte renvoie nos propres notes)
+    juce::MidiBuffer outMidi;
+    struct PendingOut { int samples = 0, midi = 60; float vel = 0; bool on = false; };
+    std::array<PendingOut, 512> pending {}; int nPending = 0;
+    struct UiHeld { int id = 0, midi = 0; bool used = false; };
+    std::array<UiHeld, 32> uiHeld {};
+    std::array<int, 128> echoOn {}, echoOff {};
+    std::array<double, 128> echoTime {};
+    double sampleClock = 0;
+    void queueOut (int delaySamples, int midi, float vel, bool on);
+    void flushOut (int n);
+
     // effets globaux
     juce::AudioBuffer<float> busL, shimBus, work;
     std::array<Svf, 2> hpf; Svf shimHp;
@@ -190,7 +205,7 @@ private:
     void retune (Voice& v, int midi, float timeSec);
     Voice* findVoice (uint32_t serial);
     int snapMidi (int m) const;
-    void arpTick (int offset);
+    void arpTick (int offset, double stepSamples);
     void renderVoices (int start, int num);
     void pushVisual (int midi, float vel);
     void buildIRs();

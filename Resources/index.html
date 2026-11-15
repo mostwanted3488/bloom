@@ -498,6 +498,7 @@ function drawAstraea(c, S) {
    état
    ========================================================= */
 const tLoad = performance.now() / 1000;
+let hostRec = false;   // l'hôte enregistre (mode plugin)
 const growOn = true;            // la fleur pousse toujours à l'ouverture
 let t0 = tLoad, resetFlash = -9;
 let spIdx = 0, vIdx = VNAMES.indexOf('NIGHT'), sndIdx = 0;
@@ -1275,6 +1276,14 @@ function frame(now) {
     hudText(vs, k.x - vw2 / 2, k.y + 22, hot ? 1 : .38, hot ? '#ffffff' : '#cfd0e6', 7);
   });
 
+  // --- voyant d'enregistrement de l'hôte
+  if (hostRec) {
+    const a = .55 + .45 * Math.sin(T * 6);
+    ctx.globalAlpha = a; ctx.fillStyle = '#ff4d5e';
+    ctx.beginPath(); ctx.arc(424, 468, 3.5, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    hudText(ST.midiout ? 'REC → PIANO ROLL' : 'REC (MIDI OFF)', 432, 471, .95, '#ff8a96', 8);
+  }
+
   // --- toast de changement
   if (toast && T - toast.t < 1.8) {
     const a = 1 - prog(T - toast.t, 1.1, 1.8);
@@ -1954,12 +1963,15 @@ if (JB) {
     JB.emitEvent('sample_data', { name: file.name, b64: btoa(bin) });
   };
   delete SELECTS.metro;                               // le métronome est celui du DAW
+  ST.midiout = 1;
+  SELECTS.midiout = { label:'MIDI', col:'R', y:556, items: () => ['OUT','OFF'], get: () => ST.midiout ? 0 : 1,
+                      set: i => { ST.midiout = i === 0 ? 1 : 0; toast = { a: 'MIDI', b: ST.midiout ? 'OUT → RECORDABLE' : 'OFF', t: nowS() }; } };
 
   let hostTempo = false, lastSnap = '';
   const snapState = () => {
     const o = { ...KV, bloom, sound: sndIdx, layer: ST.layer + 1, key: ST.root, scale: ST.scale, snap: ST.snap,
                 delay: DELAYS.indexOf(ST.delay), quant: QUANTS.indexOf(ST.quant), arp: ARPS.indexOf(ST.arp),
-                rate: RATES.indexOf(ST.rate), hover: ST.hover, flower: spIdx, color: vIdx, preset: presetIdx };
+                rate: RATES.indexOf(ST.rate), hover: ST.hover, flower: spIdx, color: vIdx, preset: presetIdx, midiout: ST.midiout };
     if (!hostTempo) o.bpm = ST.bpm;
     return o;
   };
@@ -1980,6 +1992,7 @@ if (JB) {
     if (p.arp !== undefined && ARPS[p.arp | 0]) ST.arp = ARPS[p.arp | 0];
     if (p.rate !== undefined && RATES[p.rate | 0]) ST.rate = RATES[p.rate | 0];
     if (p.hover !== undefined) ST.hover = p.hover > .5 ? 1 : 0;
+    if (p.midiout !== undefined) ST.midiout = p.midiout > .5 ? 1 : 0;
     if (p.flower !== undefined && (p.flower | 0) !== spIdx) setSpecies(p.flower | 0);
     if (p.color !== undefined) vIdx = p.color | 0;
     if (p.preset !== undefined) presetIdx = p.preset | 0;
@@ -1989,6 +2002,7 @@ if (JB) {
   JB.addEventListener('note_vis', n => noteVisual(n.midi | 0, +n.vel));   // notes du piano roll / arp / clavier
   JB.addEventListener('host', h => {
     hostTempo = h.bpm > 0;
+    hostRec = !!h.recording;
     if (hostTempo) ST.bpm = Math.round(h.bpm * 10) / 10;
     voices.length = h.voices | 0;
   });

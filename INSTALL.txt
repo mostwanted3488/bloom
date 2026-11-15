@@ -21,3 +21,19 @@ FRANCAIS
   Windows : copier BLOOM.vst3 dans C:\Program Files\Common Files\VST3\ puis rescanner les plugins dans FL Studio.
   Mac : copier BLOOM.vst3 dans ~/Library/Audio/Plug-Ins/VST3/ (et BLOOM.component dans .../Components/),
         lancer les commandes xattr ci-dessus dans le Terminal, puis rescanner les plugins.
+
+RECORD WHAT YOU PLAY WITH THE MOUSE (FL Studio)
+  BLOOM sends every note you play on the flower (mouse, computer keys, arp) as MIDI.
+  1. Open the BLOOM window > click the gear icon (top left) > in the MIDI section,
+     set "Output port" to a free number (e.g. 10) and "Input port" to the SAME number.
+  2. Arm recording (Notes) and press REC, then play on the flower.
+     The notes land in BLOOM's piano roll. BLOOM ignores its own notes coming back,
+     so nothing plays twice. A red "REC -> PIANO ROLL" light shows while FL records.
+  If FL does not record them on the same channel: create a second channel
+  (e.g. another BLOOM, or a "MIDI Out" channel) with Input port 10 and record there.
+  Turn the MIDI row to OFF in BLOOM to stop sending notes.
+  Note: Ableton Live and Logic do not accept MIDI from instrument plugins.
+
+  FR : dans la fenêtre BLOOM > roue crantée (en haut à gauche) > section MIDI :
+  "Output port" = 10 et "Input port" = 10. Active l'enregistrement des notes, appuie
+  sur REC et joue sur la fleur : les notes arrivent dans le piano roll de BLOOM.

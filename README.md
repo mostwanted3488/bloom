@@ -16,6 +16,7 @@ BLOOM is a VST3 / AU instrument (Windows & macOS). A flower made of glowing char
 - **Hover play** with grid **QUANTIZE**, click = chord, drag = arpeggio.
 - MIDI: velocity, sustain pedal, pitch bend (±2 st), mod wheel (vibrato).
 - Every control is a host parameter → **automatable** and saved with your project.
+- **MIDI out**: what you play with the mouse is sent to the host, so you can record it straight into the piano roll (see `INSTALL.txt`).
 
 ## Download
 

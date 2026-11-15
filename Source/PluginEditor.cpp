@@ -154,7 +154,7 @@ void BloomEditor::timerCallback()
     const int n = proc.engine.popVisuals (vis, 64);
     for (int i = 0; i < n; ++i) emit ("note_vis", obj ({ { "midi", vis[i].midi }, { "vel", vis[i].vel } }));
     if (++tick % 6 == 0)
-        emit ("host", obj ({ { "bpm", proc.hostBpm.load() }, { "playing", proc.hostPlaying.load() },
+        emit ("host", obj ({ { "bpm", proc.hostBpm.load() }, { "playing", proc.hostPlaying.load() }, { "recording", proc.hostRecording.load() },
                              { "voices", proc.engine.getActiveVoices() } }));
     sendParams (false);   // automation de l'hôte → interface
 }

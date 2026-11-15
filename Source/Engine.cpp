@@ -132,6 +132,29 @@ void Engine::pushUiEvent (const UiEvent& e)
     else if (scope.blockSize2 > 0) uiBuf[(size_t) scope.startIndex2] = e;
 }
 
+void Engine::queueOut (int delaySamples, int midi, float vel, bool on)
+{
+    if (! P.midiOut || nPending >= (int) pending.size()) return;
+    pending[(size_t) nPending++] = { juce::jmax (0, delaySamples), juce::jlimit (0, 127, midi), vel, on };
+}
+
+void Engine::flushOut (int n)
+{
+    int w = 0;
+    for (int i = 0; i < nPending; ++i)
+    {
+        auto e = pending[(size_t) i];
+        if (e.samples < n)
+        {
+            const auto vel = (juce::uint8) juce::jlimit (1, 127, (int) std::round (e.vel * 127.0f));
+            outMidi.addEvent (e.on ? juce::MidiMessage::noteOn (1, e.midi, vel) : juce::MidiMessage::noteOff (1, e.midi), e.samples);
+            if (e.on) { ++echoOn[(size_t) e.midi]; echoTime[(size_t) e.midi] = sampleClock + e.samples; }
+        }
+        else { e.samples -= n; pending[(size_t) w++] = e; }
+    }
+    nPending = w;
+}
+
 void Engine::pushVisual (int midi, float vel)
 {
     const auto scope = visFifo.write (1);
@@ -320,6 +343,9 @@ void Engine::retune (Voice& v, int midi, float timeSec)
 void Engine::keyDown (int id, int midi, float vel, int)
 {
     if (P.snap) midi = snapMidi (midi);
+    if (id < 1000 && P.arp == 0)
+        for (auto& u : uiHeld)
+            if (! u.used) { u = { id, midi, true }; queueOut (0, midi, vel, true); break; }
     const float pan = (rng.nextFloat() - .5f) * .6f;
     if (P.arp > 0)
     {
@@ -343,6 +369,8 @@ void Engine::keyDown (int id, int midi, float vel, int)
 
 void Engine::keyUp (int id)
 {
+    for (auto& u : uiHeld)
+        if (u.used && u.id == id) { queueOut (0, u.midi, 0, false); u.used = false; }
     auto relOrSus = [this] (uint32_t serial)
     {
         if (serial == 0) return;
@@ -400,7 +428,11 @@ void Engine::handleUi (const UiEvent& e, int)
                 }
                 qd = (next - beatPos) * spb;
             }
-            startNote (e.midi, e.vel, e.pan, false, (int) (qd + e.delaySec * sr), false);
+            const int start = (int) (qd + e.delaySec * sr);
+            startNote (e.midi, e.vel, e.pan, false, start, false);
+            const double lenBeats = P.quant > 0 ? kQuantBeats[juce::jlimit (0, 5, P.quant)] : .25;
+            queueOut (start, e.midi, e.vel, true);
+            queueOut (start + (int) (lenBeats * spb * .95), e.midi, 0, false);
             break;
         }
         case UiEvent::KeyDown: keyDown (e.id, e.midi, e.vel, 0); break;
@@ -409,14 +441,20 @@ void Engine::handleUi (const UiEvent& e, int)
     }
 }
 
-void Engine::arpTick (int offset)
+void Engine::arpTick (int offset, double stepSamples)
 {
     const int n = nArp;
     if (n <= 0) return;
+    bool fromUi = false;
+    for (int i = 0; i < n; ++i) fromUi |= arpNotes[(size_t) i].id < 1000;
     std::array<ArpNote, 32> asc;
     for (int i = 0; i < n; ++i) asc[(size_t) i] = arpNotes[(size_t) i];
     std::sort (asc.begin(), asc.begin() + n, [] (const ArpNote& a, const ArpNote& b) { return a.midi < b.midi; });
-    auto play = [&] (const ArpNote& a) { startNote (a.midi, a.vel, (rng.nextFloat() - .5f) * .6f, false, offset, true); };
+    auto play = [&] (const ArpNote& a)
+    {
+        startNote (a.midi, a.vel, (rng.nextFloat() - .5f) * .6f, false, offset, true);
+        if (fromUi) { queueOut (offset, a.midi, a.vel, true); queueOut (offset + (int) (stepSamples * .9), a.midi, 0, false); }
+    };
     switch (P.arp)
     {
         case 6: for (int i = 0; i < n; ++i) play (asc[(size_t) i]); break;            // CHORD
@@ -576,6 +614,7 @@ void Engine::render (juce::AudioBuffer<float>& out, juce::MidiBuffer& midi, cons
     if (hostPlaying && hostHasPpq) beatPos = hostPpq;
 
     busL.clear (0, n); shimBus.clear (0, n);
+    outMidi.clear();
 
     // événements de l'interface
     {
@@ -590,7 +629,7 @@ void Engine::render (juce::AudioBuffer<float>& out, juce::MidiBuffer& midi, cons
         const double step = kRateBeats[juce::jlimit (0, 5, P.rate)];
         const double endBeat = beatPos + n / spb;
         for (double k = std::ceil (beatPos / step - 1e-9); k * step < endBeat; k += 1)
-            arpTick ((int) ((k * step - beatPos) * spb));
+            arpTick ((int) ((k * step - beatPos) * spb), step * spb);
     }
     else arpI = 0;
 
@@ -601,6 +640,16 @@ void Engine::render (juce::AudioBuffer<float>& out, juce::MidiBuffer& midi, cons
         const int at = juce::jlimit (0, n, meta.samplePosition);
         if (at > pos) { renderVoices (pos, at - pos); pos = at; }
         const auto msg = meta.getMessage();
+        if (msg.isNoteOn() || msg.isNoteOff())
+        {
+            const auto nn = (size_t) msg.getNoteNumber();
+            if (msg.isNoteOn() && echoOn[nn] > 0)
+            {
+                if (sampleClock + at - echoTime[nn] < sr * .5) { --echoOn[nn]; ++echoOff[nn]; continue; }   // notre propre note revenue
+                echoOn[nn] = 0;
+            }
+            if (msg.isNoteOff() && echoOff[nn] > 0) { --echoOff[nn]; continue; }
+        }
         if (msg.isNoteOn())                  keyDown (1000 + msg.getNoteNumber(), msg.getNoteNumber(), msg.getFloatVelocity(), at);
         else if (msg.isNoteOff())            keyUp (1000 + msg.getNoteNumber());
         else if (msg.isSustainPedalOn())     setSustain (true);
@@ -615,6 +664,8 @@ void Engine::render (juce::AudioBuffer<float>& out, juce::MidiBuffer& midi, cons
         }
     }
     if (pos < n) renderVoices (pos, n - pos);
+    flushOut (n);
+    sampleClock += n;
     beatPos += n / spb;
 
     // --- effets globaux

@@ -8,7 +8,7 @@ namespace bloom
 // Identifiants des paramètres (les mêmes clés que l'interface web)
 inline const char* const kFloatIds[] = { "attack", "release", "tone", "space", "shimmer", "width", "lowcut", "glide", "blend", "bloom", "bpm" };
 inline const char* const kChoiceIds[] = { "sound", "layer", "key", "scale", "delay", "quant", "arp", "rate", "flower", "color", "preset" };
-inline const char* const kBoolIds[] = { "snap", "hover" };
+inline const char* const kBoolIds[] = { "snap", "hover", "midiout" };
 }
 
 class BloomProcessor : public juce::AudioProcessor
@@ -28,7 +28,7 @@ public:
 
     const juce::String getName() const override { return JucePlugin_Name; }
     bool acceptsMidi() const override { return true; }
-    bool producesMidi() const override { return false; }
+    bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }
 
@@ -51,7 +51,7 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     bloom::Engine engine;
     std::atomic<double> hostBpm { 0.0 };
-    std::atomic<bool> hostPlaying { false };
+    std::atomic<bool> hostPlaying { false }, hostRecording { false };
 
 private:
     bool loadFromReader (std::unique_ptr<juce::AudioFormatReader> reader, const juce::String& fileName);

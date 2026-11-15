@@ -47,6 +47,7 @@ AudioProcessorValueTreeState::ParameterLayout BloomProcessor::createLayout()
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "preset", 1 }, "Preset", arr (bloom::kPresetNames), 0));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { "snap", 1 }, "Snap to Scale", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { "hover", 1 }, "Hover Play", true));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { "midiout", 1 }, "MIDI Out", true));
     return layout;
 }
 
@@ -71,15 +72,16 @@ void BloomProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 void BloomProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
 {
     ScopedNoDenormals noDenormals;
-    double bpm = 0, ppq = 0; bool playing = false, hasPpq = false;
+    double bpm = 0, ppq = 0; bool playing = false, hasPpq = false, recording = false;
     if (auto* ph = getPlayHead())
         if (const auto pos = ph->getPosition())
         {
             if (const auto b = pos->getBpm()) bpm = *b;
             playing = pos->getIsPlaying();
+            recording = pos->getIsRecording();
             if (const auto q = pos->getPpqPosition()) { ppq = *q; hasPpq = true; }
         }
-    hostBpm.store (bpm); hostPlaying.store (playing);
+    hostBpm.store (bpm); hostPlaying.store (playing); hostRecording.store (recording);
 
     bloom::EngineParams p;
     p.attack = raw ("attack"); p.release = raw ("release"); p.tone = raw ("tone"); p.space = raw ("space");
@@ -88,6 +90,7 @@ void BloomProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
     p.sound = (int) raw ("sound"); p.layer = (int) raw ("layer") - 1; p.root = (int) raw ("key");
     p.scale = (int) raw ("scale"); p.delayDiv = (int) raw ("delay"); p.quant = (int) raw ("quant");
     p.arp = (int) raw ("arp"); p.rate = (int) raw ("rate"); p.snap = raw ("snap") > .5f;
+    p.midiOut = raw ("midiout") > .5f;
 
     buffer.clear();
     if (buffer.getNumChannels() >= 2)
@@ -100,6 +103,9 @@ void BloomProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
         buffer.addFrom (0, 0, st, 1, 0, buffer.getNumSamples());
         buffer.applyGain (.5f);
     }
+    // les notes jouées dans le plugin repartent vers l'hôte (enregistrables dans le piano roll)
+    midi.clear();
+    midi.addEvents (engine.getOutMidi(), 0, buffer.getNumSamples(), 0);
 }
 
 AudioProcessorEditor* BloomProcessor::createEditor() { return new BloomEditor (*this); }
